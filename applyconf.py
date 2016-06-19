@@ -33,11 +33,19 @@ def parseargs():
     """ Parse the command line arguments. """
     parser = argparse.ArgumentParser(description="Apply configuration templates.")
 
-    parser.add_argument("-f", dest="force", action="store_true", default=False, help="Force-build a file even if not out of date.")
-    parser.add_argument("-s", dest="symlink", action="store_true", default=False, help="Copy symlink to file instead of following it.")
-    parser.add_argument("-i", dest="input", required=True, help="Specify the input file or directory.")
-    parser.add_argument("-o", dest="output", required=True, help="Specify the output file or directory.")
-    parser.add_argument("-d", dest="data", required=True, help="Specify the data file.")
+    parser.add_argument("-f", dest="force", action="store_true", default=False,
+        help="Force-build a file even if not out of date."
+    )
+    parser.add_argument("-s", dest="symlink", action="store_true", default=False,
+        help=("Copy symlink that links to a file instead of following it. "
+              "Symlinks to directories and non-regular files are always copied as symlinks.")
+    )
+    parser.add_argument("-i", dest="input", required=True,
+        help="Specify the input file or directory.")
+    parser.add_argument("-o", dest="output", required=True,
+        help="Specify the output file or directory.")
+    parser.add_argument("-d", dest="data", required=True,
+        help="Specify the data file.")
 
     return parser.parse_args()
 
@@ -74,6 +82,8 @@ def apply(source, target, data):
     dirname = os.path.dirname(target)
     if not os.path.isdir(dirname):
         os.makedirs(dirname)
+    elif os.path.exists(target):
+        os.unlink(target) # Unlink so if it is a symlink we don't overwrite target of symlink
     
     with open(target, "wt") as handle:
         handle.write(contents)
@@ -114,7 +124,7 @@ def main():
 
     # Building just a file
     if os.path.isfile(args.input):
-        if checktimes(args.input, args.output):
+        if args.force or checktimes(args.input, args.output):
             log("BUILD", args.output)
             apply(args.input, args.output, data)
         else:
@@ -129,11 +139,11 @@ def main():
 
         # Walk only returns files and links
         # If file always build
-        # If link to file, bild if not args.symlink
+        # If link to file, build if not args.symlink
         # For all other links (such as to directory, or device, etc), copy link
 
         if os.path.isfile(input) and (not os.path.islink(input) or not args.symlink):
-            if checktimes(input, output):
+            if args.force or os.path.islink(output) or checktimes(input, output):
                 log("BUILD", output)
                 apply(input, output, data)
             else:
