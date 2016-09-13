@@ -85,12 +85,35 @@ class Control(object):
         self.ignore = False
 
 
+class LoadIni(object):
+    """ Class to load an INI file. """
+
+    @staticmethod
+    def load(filename):
+        """ Load the data and return the resulting dict. """
+
+        result = {}
+
+        parser = configparser.SafeConfigParser()
+        parser.read(filename)
+
+        for section in parser.sections():
+            if not section in result:
+                result[section] = {}
+
+            for (key, value) in parser.items(section):
+                result[section][key] = value
+
+        return result
+
+
 class ProgramData(object):
     """ Represent the program data. """
 
     def __init__(self):
         """ Initialize the program data. """
         self.cmdline = None
+        self.setup = None
         self.data = None
         self.controls = None
 
@@ -112,13 +135,37 @@ class ProgramData(object):
             help="Specify the output directory.")
         parser.add_argument("-d", dest="data",
             help="Specify the data file.")
+        parser.add_argument("-t", dest="type", default="ini",
+            help="Specify the data type.")
         parser.add_argument("-c", dest="control",
             help="Specify the control file.")
+        parser.add_argument("-s", dest="setup",
+            help="Provide a setup script file.")
         parser.add_argument(dest="values", nargs="*",
             help="Specify name=value pairs of data.")
 
         self.cmdline = parser.parse_args()
         return self.cmdline
+
+    def getsetup(self):
+        """ Read the setup script file. """
+        if not self.setup is None:
+            return self.setup
+
+        self.setup = {}
+
+        cmdline = self.getcmdline()
+        if cmdline.setup is None:
+            return self.setup
+
+        # Load and execute the setup file
+        source = open(cmdline.setup, "rU").read()
+        code = compile(source, cmdline.setup, "exec")
+        data = {}
+        exec(code, data, data)
+
+        self.setup = data
+        return self.setup
 
     def getdata(self):
         """ Read the data file and return the resulting dict. """
@@ -126,19 +173,25 @@ class ProgramData(object):
             return self.data
 
         cmdline = self.getcmdline()
+        setup = self.getsetup()
+
         result = {}
+
+        # Prepare our data from setup
+        if "setup_context" in setup:
+            result.update(setup["setup_context"]())
+
+        # Prepare our data loaders
+        loaders = {
+            "ini": LoadIni.load
+        }
+        if "setup_data_loader" in setup:
+            loaders.update(setup["setup_data_loader"]())
 
         # Read from data file
         if cmdline.data:
-            parser = configparser.SafeConfigParser()
-            parser.read(cmdline.data)
-
-            for section in parser.sections():
-                if not section in result:
-                    result[section] = {}
-
-                for (key, value) in parser.items(section):
-                    result[section][key] = value
+            loader = loaders.get(cmdline.type, LoadIni.load)
+            result.update(loader(cmdline.data))
 
         # Update with command line values
         for value in cmdline.values:
@@ -236,6 +289,17 @@ class ProgramData(object):
 def apply(source, dirname, env, state, progdata):
     """ Apply a template to some data and save the results. """
     cmdline = progdata.getcmdline()
+
+    data = {
+        "applyconf": {
+            "root": cmdline.input, # Only realy useful if input is a directory
+            "sourcefile": os.path.basename(source),
+            "sourcedir": os.path.dirname(source),
+            "targetdir": dirname
+        }
+    }
+
+    data.update(progdata.getdata())
 
     tmpl = env.load_file(source)
     rndr = template.StringRenderer()
@@ -402,7 +466,7 @@ def main():
 
 try:
     main()
-except (OSError, ValueError, configparser.Error, template.errors.Error) as e:
+except (IOError, OSError, ValueError, configparser.Error, template.errors.Error) as e:
     log(type(e).__name__, str(e))
     sys.exit(1)
 
