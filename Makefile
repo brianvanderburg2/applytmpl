@@ -16,7 +16,7 @@ clean: check
 	rm -rf output
 
 .PHONY: tarball
-tarball: NAME:=applyconf-$(shell date +%Y%m%d)-$(shell git describe --always)
+tarball: NAME:=applytmpl-$(shell date +%Y%m%d)-$(shell git describe --always)
 tarball: check clean
 	mkdir -p output
 	git archive --format=tar --prefix=$(NAME)/ HEAD | xz > output/$(NAME).tar.xz
