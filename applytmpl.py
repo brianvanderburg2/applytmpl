@@ -27,6 +27,11 @@ except ImportError:
 from mrbaviirc import template
 
 
+class Error(Exception):
+    """ Our custom exception object. """
+    pass
+
+
 class Control(object):
     """ Represent a control state. """
     UNSET = 0
@@ -74,13 +79,13 @@ class Control(object):
 
         return c
 
-    def defaults(self):
+    def defaults(self, ext=None):
         """ Set the defaults. """
         self.file_symlink = self.FOLLOW
         self.dir_symlink = self.COPY
         self.other_symlink = self.COPY
         self.exclude = [".*", "*~"]
-        self.extension = ".tmpl"
+        self.extension = ext
         self.other = self.IGNORE
         self.ignore = False
 
@@ -114,8 +119,12 @@ class ProgramData(object):
         """ Initialize the program data. """
         self.cmdline = None
         self.setup = None
-        self.data = None
+        self.setup_context = None
+        self.setup_data_loaders = None
         self.controls = None
+        self.params = None
+        self.data = None
+        self.lib = None
 
     def getcmdline(self):
         """ Parse the command line arguments. """
@@ -124,22 +133,29 @@ class ProgramData(object):
 
         parser = argparse.ArgumentParser(description="Apply configuration templates.")
 
-        parser.add_argument("-l", dest="live", action="store_true", default=False,
+        parser.add_argument("--live", dest="live", action="store_true", default=False,
             help="Make actual changes instead of a dry run.")
-        parser.add_argument("-f", dest="force", action="store_true", default=False,
+        parser.add_argument("--force", dest="force", action="store_true", default=False,
             help="Force-build a file even if not out of date."
         )
-        parser.add_argument("-i", dest="input", required=True,
+        parser.add_argument("--input", dest="input", required=True,
             help="Specify the input file or directory.")
-        parser.add_argument("-o", dest="output", required=True,
+        parser.add_argument("--output", dest="output", required=True,
             help="Specify the output directory.")
-        parser.add_argument("-d", dest="data",
-            help="Specify the data file.")
-        parser.add_argument("-t", dest="type", default="ini",
-            help="Specify the data type.")
-        parser.add_argument("-c", dest="control",
+        parser.add_argument("--mode", dest="mode", choices=["template", "data"],
+            required=True,
+            help="Specify whether input is data or templates")
+        parser.add_argument("--ext", dest="extension", required=True,
+            help="File extension, including the dot, to act on by default.")
+        parser.add_argument("--data", dest="data",
+            help="Specify the data file if mode is template.")
+        parser.add_argument("--template", dest="template",
+            help="Specify the template if mode is data.")
+        parser.add_argument("--datatype", dest="datatype", default="ini",
+            help="Specify the expected data type.")
+        parser.add_argument("--control", dest="control",
             help="Specify the control file.")
-        parser.add_argument("-s", dest="setup",
+        parser.add_argument("--setup", dest="setup",
             help="Provide a setup script file.")
         parser.add_argument(dest="values", nargs="*",
             help="Specify name=value pairs of data.")
@@ -167,7 +183,50 @@ class ProgramData(object):
         self.setup = data
         return self.setup
 
-    def getdata(self):
+    def getsetup_context(self):
+        """ Get the setup context. """
+        if not self.setup_context is None:
+            return self.setup_context
+
+        setup = self.getsetup()
+        self.setup_context = {}
+        if "setup_context" in setup:
+            self.setup_context.update(setup["setup_context"]())
+
+        return self.setup_context
+
+    def getsetup_data_loaders(self):
+        """ Return the setup data loaders. """
+        if not self.setup_data_loaders is None:
+            return self.setup_data_loaders
+
+        setup = self.getsetup()
+        self.setup_data_loaders = {
+            "ini": LoadIni.load
+        }
+        if "setup_data_loaders" in setup:
+            self.setup_data_loaders.update(setup["setup_data_loaders"]())
+
+        return self.setup_data_loaders
+
+    def getparams(self):
+        """ Return data from command line parameters. """
+        if not self.params is None:
+            return self.params
+
+        cmdline = self.getcmdline()
+        self.params = {}
+
+        for value in cmdline.values:
+            parts = value.split("=", 1)
+            if len(parts) == 1:
+                self.params[parts[0].strip()] = True
+            else:
+                self.params[parts[0].strip()] = parts[1].strip()
+
+        return self.params
+
+    def getdata(self, source):
         """ Read the data file and return the resulting dict. """
         if not self.data is None:
             return self.data
@@ -177,32 +236,28 @@ class ProgramData(object):
 
         result = {}
 
-        # Prepare our data from setup
-        if "setup_context" in setup:
-            result.update(setup["setup_context"]())
+        # From the data
+        loaders = self.getsetup_data_loaders()
+        loader = loaders.get(cmdline.datatype, LoadIni.load)
 
-        # Prepare our data loaders
-        loaders = {
-            "ini": LoadIni.load
-        }
-        if "setup_data_loader" in setup:
-            loaders.update(setup["setup_data_loader"]())
+        if cmdline.mode == "template":
+            # Input is template, so data comes from data file
+            if cmdline.data:
+                result.update(loader(cmdline.data))
+        else:
+            # Input is data, so data comes from there
+            result.update(loader(source))
 
-        # Read from data file
-        if cmdline.data:
-            loader = loaders.get(cmdline.type, LoadIni.load)
-            result.update(loader(cmdline.data))
+        # From command line parameters
+        result.update(self.getparams())
 
-        # Update with command line values
-        for value in cmdline.values:
-            parts = value.split("=", 1)
-            if len(parts) == 1:
-                result[parts[0].strip()] = True
-            else:
-                result[parts[0].strip()] = parts[1].strip()
-
-        self.data = result
-        return self.data
+        if cmdline.mode == "template":
+            # Data is from a single source, so we can cache the result.
+            self.data = result
+            return self.data
+        else:
+            # Each source input is data, so we can't cache the result
+            return result
 
     def getcontrols(self):
         """ Read the control file. """
@@ -285,30 +340,57 @@ class ProgramData(object):
         else:
             return state.clone(controls[path])
 
+    def getlib(self):
+        """ Return the applyconf initial data. """
+        if not self.lib is None:
+            return self.lib
+
+        cmdline = self.getcmdline()
+
+        self.lib = {
+            "lib": template.StdLib(),
+            "applytmpl": {
+                "root": cmdline.input,
+            }
+        }
+
+        self.lib.update(self.getsetup_context())
+        return self.lib
+
 
 def apply(source, dirname, env, state, progdata):
     """ Apply a template to some data and save the results. """
     cmdline = progdata.getcmdline()
 
-    data = {
-        "applyconf": {
-            "root": cmdline.input, # Only realy useful if input is a directory
-            "sourcefile": os.path.basename(source),
-            "sourcedir": os.path.dirname(source),
-            "targetdir": dirname
-        }
-    }
+    data = dict(progdata.getlib())
 
-    data.update(progdata.getdata())
+    data["applytmpl"].update({
+        "sourcefile": os.path.basename(source),
+        "sourcedir": os.path.dirname(source),
+        "targetdir": dirname
+    })
 
-    tmpl = env.load_file(source)
+    data.update(progdata.getdata(source))
+
+    if cmdline.mode == "template":
+        # Input is template, load template from input
+        tmpl = env.load_file(source)
+    else:
+        # Input is data, load templte from cmdline
+        if cmdline.template:
+            tmpl = env.load_file(cmdline.template)
+        else:
+            raise Error("Must specify template with mode data")
+
+    env.get_scope().clear() # Start with a blank slate on each apply.
+
     rndr = template.StringRenderer()
-    tmpl.render(rndr, progdata.getdata())
+    tmpl.render(rndr, data)
 
     for section in rndr.get_sections():
         if not section.startswith("file:"):
             continue
-        target = os.path.join(dirname, section[5:])
+        target = os.path.join(dirname, section[5:].replace("/", os.sep))
 
         if not (os.path.islink(target) or checktimes(source, target) or cmdline.force):
             log("NOCHG", target, source)
@@ -447,10 +529,10 @@ def main():
 
     # Set initial states
     state = Control()
-    state.defaults()
+    state.defaults(args.extension)
 
     # Create our template environment
-    env = template.Environment({"lib": template.StdLib()})
+    env = template.Environment()
 
 
     # Build
@@ -466,7 +548,7 @@ def main():
 
 try:
     main()
-except (IOError, OSError, ValueError, configparser.Error, template.errors.Error) as e:
+except (IOError, OSError, ValueError, Error, template.Error) as e:
     log(type(e).__name__, str(e))
     sys.exit(1)
 
