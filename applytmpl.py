@@ -382,7 +382,7 @@ def apply(source, dirname, env, state, progdata):
         else:
             raise Error("Must specify template with mode data")
 
-    env.get_scope().clear() # Start with a blank slate on each apply.
+    env.clear() # Start with a blank slate on each apply.
 
     rndr = template.StringRenderer()
     tmpl.render(rndr, data)
