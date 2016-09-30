@@ -13,10 +13,6 @@ import argparse
 import fnmatch
 import shutil
 
-try:
-    import ConfigParser as configparser
-except ImportError:
-    import configparser
 
 try:
     from codecs import open
@@ -90,12 +86,74 @@ class Control(object):
         self.ignore = False
 
 
+class LoadXML_Node(template.Library):
+    """ Represent an XML node. """
+
+    def __init__(self, node):
+        """ Initialize the XML node. """
+        self._node = node
+        self._text = None
+
+    def call_tag(self):
+        """ Get the name of the node. """
+        return self._node.tag
+
+    def call_text(self):
+        """ Get the text of the node. """
+        if self._text is None:
+            self._text = "".join(self._node.itertext())
+
+        return self._text
+
+    def __iter__(self):
+        """ Allow iteration over the node. """
+        for child in self._node:
+            yield LoadXML_Node(child)
+
+    def lib_find(self, what):
+        """ Find child items. """
+        child = self._node.find(what)
+        if not child is None:
+            child = LoadXML_Node(child)
+
+        return child
+
+    def lib_findall(self, what):
+        """ Find child items. """
+        return map(LoadXML_Node, self._node.findall(what))
+
+    def lib_get(self, attr, defval=None):
+        """ Get an attribute or default vaule. """
+        return self._node.get(key, defval)
+
+
+class LoadXML(object):
+    """ An XML loader. """
+
+    @staticmethod
+    def load(filename):
+        """ Load the data and return the object to assign to 'data' """
+        try:
+            import xml.etree.cElementTree as ET
+        except ImportError:
+            import xml.etree.ElementTree as ET
+
+        tree = ET.parse(filename)
+        root = tree.getroot()
+
+        return LoadXML_Node(root)
+
+
 class LoadIni(object):
     """ Class to load an INI file. """
 
     @staticmethod
     def load(filename):
         """ Load the data and return the resulting dict. """
+        try:
+            import ConfigParser as configparser
+        except ImportError:
+            import configparser
 
         result = {}
 
@@ -110,6 +168,18 @@ class LoadIni(object):
                 result[section][key] = value
 
         return result
+
+
+class LoadJSON(object):
+    """ Class to load a JSON file. """
+
+    @staticmethod
+    def load(filename):
+        """ Load the data and result the result. """
+        import json
+
+        with open(filename, "rU") as handle:
+            return json.load(handle)
 
 
 class ProgramData(object):
@@ -202,7 +272,9 @@ class ProgramData(object):
 
         setup = self.getsetup()
         self.setup_data_loaders = {
-            "ini": LoadIni.load
+            "xml": LoadXML.load,
+            "ini": LoadIni.load,
+            "json": LoadJSON.load
         }
         if "setup_data_loaders" in setup:
             self.setup_data_loaders.update(setup["setup_data_loaders"]())
@@ -243,10 +315,11 @@ class ProgramData(object):
         if cmdline.mode == "template":
             # Input is template, so data comes from data file
             if cmdline.data:
-                result.update(loader(cmdline.data))
+                result["data"] = loader(cmdline.data)
         else:
             # Input is data, so data comes from there
-            result.update(loader(source))
+            result["data"] = loader(source)
+
 
         # From command line parameters
         result.update(self.getparams())
