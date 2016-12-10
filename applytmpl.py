@@ -44,21 +44,23 @@ class ProgramData(object):
 
         parser = argparse.ArgumentParser(description="Apply configuration templates.")
 
-        parser.add_argument("--live", dest="live", action="store_true", default=False,
+        parser.add_argument("-l", dest="live", action="store_true", default=False,
             help="Make actual changes instead of a dry run.")
-        parser.add_argument("--force", dest="force", action="store_true", default=False,
+        parser.add_argument("-f", dest="force", action="store_true", default=False,
             help="Force-build a file even if not out of date."
         )
-        parser.add_argument("--input", dest="input", required=True,
-            help="Specify the input file or directory.")
-        parser.add_argument("--output", dest="output", required=True,
+        parser.add_argument("-r", dest="root", required=True,
+            help="Specify the input root.")
+        parser.add_argument("-o", dest="output", required=True,
             help="Specify the output directory.")
-        parser.add_argument("--ext", dest="extension", required=True,
-            help="File extension, including the dot, to act on")
-        parser.add_argument("--data", dest="data",
-            help="Specify the data file.")
-        parser.add_argument(dest="values", nargs="*",
+        parser.add_argument("-d", dest="data", action="append",
+            help="Specify the data files.")
+        parser.add_argument("-D", dest="params", action="append",
             help="Specify name=value pairs of data.")
+        parser.add_argument("-w", dest="walk",
+            help="Walk the input root and specify glob pattern to match.")
+        parser.add_argument("inputs", nargs="*",
+            help="Input templates.")
 
         self.cmdline = parser.parse_args()
         return self.cmdline
@@ -71,12 +73,13 @@ class ProgramData(object):
         cmdline = self.getcmdline()
         self.params = {}
 
-        for value in cmdline.values:
-            parts = value.split("=", 1)
-            if len(parts) == 1:
-                self.params[parts[0].strip()] = True
-            else:
-                self.params[parts[0].strip()] = parts[1].strip()
+        if cmdline.params:
+            for value in cmdline.params:
+                parts = value.split("=", 1)
+                if len(parts) == 1:
+                    self.params[parts[0].strip()] = True
+                else:
+                    self.params[parts[0].strip()] = parts[1].strip()
 
         return self.params
 
@@ -89,7 +92,8 @@ class ProgramData(object):
 
         # Parse data
         parser = configparser.SafeConfigParser()
-        parser.read(cmdline.data)
+        if cmdline.data:
+            parser.read(cmdline.data)
 
         result = {}
         for section in parser.sections():
@@ -115,7 +119,7 @@ class ProgramData(object):
         self.lib = {
             "lib": mrbavii_lib_template.StdLib(),
             "applytmpl": {
-                "root": cmdline.input,
+                "root": cmdline.root,
             }
         }
         return self.lib
@@ -215,11 +219,21 @@ def main():
     # Create our template environment
     env = mrbavii_lib_template.Environment()
 
+    # Determine inputs
+    inputs = list(args.inputs)
+    if args.walk:
+        for (dir, dirs, files) in os.walk(args.root):
+            extra = [os.path.join(dir, i) for i in files if fnmatch.fnmatch(i, args.walk)]
+            inputs.extend(extra)
+
     # Build
-    if os.path.isfile(args.input):
-        apply(args.input, args.output, env, progdata)
-    else:
-        process(args.input, args.output, env, progdata)
+    for input in inputs:
+        # Deterine output
+        relpath = os.path.relpath(input, args.root)
+        output = os.path.join(args.output, relpath)
+
+        # Apply
+        apply(input, os.path.dirname(output), env, progdata)
 
     if not args.live:
         log("DRYRN", "This was a dry run.")
