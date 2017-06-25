@@ -24,7 +24,7 @@ except ImportError:
     import configparser
 
 
-import mrbavii_lib_template
+from mrbaviirc import template
 
 
 class ProgramData(object):
@@ -117,7 +117,7 @@ class ProgramData(object):
         cmdline = self.getcmdline()
 
         self.lib = {
-            "lib": mrbavii_lib_template.StdLib(),
+            "lib": template.StdLib(),
             "applytmpl": {
                 "root": cmdline.root,
             }
@@ -143,7 +143,7 @@ def apply(source, dirname, env, progdata):
     tmpl = env.load_file(source)
     env.clear() # Start with a blank slate on each apply.
 
-    rndr = mrbavii_lib_template.StringRenderer()
+    rndr = template.StringRenderer()
     tmpl.render(rndr, data)
 
     for section in rndr.get_sections():
@@ -217,7 +217,7 @@ def main():
     args = progdata.getcmdline()
 
     # Create our template environment
-    env = mrbavii_lib_template.Environment()
+    env = template.Environment()
 
     # Determine inputs
     inputs = list(args.inputs)
@@ -241,7 +241,7 @@ def main():
 
 try:
     main()
-except (IOError, OSError, ValueError, mrbavii_lib_template.Error) as e:
+except (IOError, OSError, ValueError, template.Error) as e:
     log(type(e).__name__, str(e))
     sys.exit(1)
 
