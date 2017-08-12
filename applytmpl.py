@@ -146,28 +146,45 @@ def apply(source, dirname, env, progdata):
     rndr = template.StringRenderer()
     tmpl.render(rndr, data)
 
+    found_sections = False
     for section in rndr.get_sections():
         if not section.startswith("file:"):
             continue
+        found_sections = True
         target = os.path.join(dirname, section[5:].replace("/", os.sep))
 
-        if not (os.path.islink(target) or checktimes(source, target) or cmdline.force):
-            log("NOCHG", target, source)
-            continue
+        save(source, target, rndr.get_section(section), progdata)
 
-        log("BUILD", target, source)
-        if cmdline.dry:
-            continue
+    if not found_sections:
+        # If no sections were created, just write the main content to the
+        # output file.  The filename is determined as the input without
+        # it's final extension
+        (basename, _) = os.path.splitext(os.path.basename(source))
+        target = os.path.join(dirname, basename)
 
-        if os.path.exists(target):
-            os.unlink(target) # Unlink so if it is a symlink we don't overwrite target of symlink
+        save(source, target, rndr.get(), progdata)
 
-        targetdir = os.path.dirname(target)
-        if not os.path.isdir(targetdir):
-            os.makedirs(targetdir)
-    
-        with open(target, "wt") as handle:
-            handle.write(rndr.get_section(section))
+def save(source, target, content, progdata):
+    """ Save regenerated output to a file. """
+    cmdline = progdata.getcmdline()
+
+    if not (os.path.islink(target) or checktimes(source, target) or cmdline.force):
+        log("NOCHG", target, source)
+        return
+
+    log("BUILD", target, source)
+    if cmdline.dry:
+        return
+
+    if os.path.exists(target):
+        os.unlink(target) # Unlink so if it is a symlink we don't overwrite target of symlink
+
+    targetdir = os.path.dirname(target)
+    if not os.path.isdir(targetdir):
+        os.makedirs(targetdir)
+
+    with open(target, "wt") as handle:
+        handle.write(content)
 
 
 def checktimes(source, target):
