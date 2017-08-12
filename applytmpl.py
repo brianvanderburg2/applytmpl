@@ -4,7 +4,7 @@
 __author__      = "Brian Allen Vanderburg II"
 __copyright__   = "Copyright 2016"
 __license__     = "Apache License 2.0"
-__version__     = "0.0.1"
+__version__     = "0.0.2"
 
 
 import sys
@@ -44,8 +44,8 @@ class ProgramData(object):
 
         parser = argparse.ArgumentParser(description="Apply configuration templates.")
 
-        parser.add_argument("-l", dest="live", action="store_true", default=False,
-            help="Make actual changes instead of a dry run.")
+        parser.add_argument("--dry", dest="dry", action="store_true", default=False,
+            help="Perform a dry run.")
         parser.add_argument("-f", dest="force", action="store_true", default=False,
             help="Force-build a file even if not out of date."
         )
@@ -156,7 +156,7 @@ def apply(source, dirname, env, progdata):
             continue
 
         log("BUILD", target, source)
-        if not cmdline.live:
+        if cmdline.dry:
             continue
 
         if os.path.exists(target):
@@ -189,27 +189,6 @@ def log(status, message, extra=None):
         print("{0}: {1}".format(status, message))
 
 
-def process(indir, outdir, env, progdata):
-    """ Process a given directory. """
-    cmdline = progdata.getcmdline()
-
-    listing = os.listdir(indir)
-    for entry in sorted(listing):
-
-        # Set some values for the entry
-        inpath = os.path.join(indir, entry)
-        outpath = os.path.join(outdir, entry)
-
-        # Handle the entry
-        if os.path.islink(inpath):
-            continue
-        elif os.path.isdir(inpath):
-            process(inpath, outpath, env, progdata)
-        elif os.path.isfile(inpath) and inpath.endswith(cmdline.extension):
-            apply(inpath, os.path.dirname(outpath), env, progdata)
-
-
-
 def main():
     """ Run the program. """
     # Basic setup
@@ -235,7 +214,7 @@ def main():
         # Apply
         apply(input, os.path.dirname(output), env, progdata)
 
-    if not args.live:
+    if args.dry:
         log("DRYRN", "This was a dry run.")
 
 
