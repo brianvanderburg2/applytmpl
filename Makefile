@@ -18,7 +18,7 @@ clean: check
 	find -depth \( -path "*/__pycache__/*" -o -name __pycache__ \) -delete
 
 .PHONY: tarball
-tarball: NAME:=applytmpl-$(shell date +%Y%m%d)-$(shell git describe --always)
+tarball: NAME:=mrbavii_applytmpl-$(shell date +%Y%m%d)-$(shell git describe --always)
 tarball: check clean
 	mkdir -p output
 	git archive --format=tar --prefix=$(NAME)/ HEAD | xz > output/$(NAME).tar.xz
