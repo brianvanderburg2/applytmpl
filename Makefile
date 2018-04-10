@@ -14,6 +14,8 @@ test: check
 clean: check
 	rm -rf test/output
 	rm -rf output
+	find -name "*.py[co]" -delete
+	find -depth \( -path "*/__pycache__/*" -o -name __pycache__ \) -delete
 
 .PHONY: tarball
 tarball: NAME:=applytmpl-$(shell date +%Y%m%d)-$(shell git describe --always)

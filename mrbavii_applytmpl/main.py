@@ -4,7 +4,6 @@
 __author__      = "Brian Allen Vanderburg II"
 __copyright__   = "Copyright 2016"
 __license__     = "Apache License 2.0"
-__version__     = "0.0.2"
 
 
 import sys
@@ -206,7 +205,7 @@ def log(status, message, extra=None):
         print("{0}: {1}".format(status, message))
 
 
-def main():
+def entry():
     """ Run the program. """
     # Basic setup
     progdata = ProgramData()
@@ -235,10 +234,13 @@ def main():
         log("DRYRN", "This was a dry run.")
 
 
-try:
-    main()
-except (IOError, OSError, ValueError, template.Error) as e:
-    log(type(e).__name__, str(e))
-    sys.exit(1)
+def main():
+    try:
+        entry()
+    except (IOError, OSError, ValueError, template.Error) as e:
+        log(type(e).__name__, str(e))
+        sys.exit(1)
 
+if __name__ == "__main__":
+    main()
 
