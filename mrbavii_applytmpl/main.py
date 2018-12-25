@@ -140,8 +140,6 @@ def apply(source, dirname, env, progdata):
 
     # Load template from input
     tmpl = env.load_file(source)
-    env.clear() # Start with a blank slate on each apply.
-
     rndr = template.StringRenderer()
     tmpl.render(rndr, data)
 
