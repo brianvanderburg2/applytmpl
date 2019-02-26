@@ -1,13 +1,13 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace+packages
 
 metadata = {}
-with open("mrbavii_applytmpl/_version.py") as handle:
+with open("mrbavii/applytmpl/_version.py") as handle:
     exec(handle.read(), metadata)
 
 setup(
-    name="mrbavii_applytmpl",
+    name="mrbavii.applytmpl",
     version=metadata["__version__"],
     description=metadata["__doc__"].strip(),
     url='',
@@ -15,7 +15,7 @@ setup(
     packages=find_packages(),
     entry_points={
         "console_scripts": [
-            "mrbavii-applytmpl = mrbavii_applytmpl.main:main"
+            "mrbavii-applytmpl = mrbavii.applytmpl.run:run"
         ]
     }
 )
