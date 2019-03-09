@@ -204,8 +204,8 @@ class App(object):
         parser = argparse.ArgumentParser(description="Make static pages.")
         addarg = parser.add_argument
 
-        addarg("--mode", dest="mode", default="template", choices=("template", "data"),
-            help="Specify whether input is treated as template or headered data.")
+        addarg("--type", dest="type", default="template", choices=("template", "xml", "json", "ini", "auto"),
+            help="Specify whether how the input is treated.")
 
         addarg("--root-dir", dest="root_dir", required=True,
             help="Root directory to treat input files relative to.")
@@ -247,7 +247,11 @@ class App(object):
         args = parser.parse_args()
 
         # Put into out attributes
-        self.mode = self.MODE_TEMPLATE if args.mode == "template" else self.MODE_DATA
+        if args.type == "auto":
+            self.type = SourceBase.TYPE_HEADERED
+        else:
+            self.type = SourceBase.TYPE_MAP[args.type]
+
         self.root_dir = args.root_dir
         self.out_dir = args.out_dir
         
@@ -345,18 +349,12 @@ class App(object):
 
         # Now prepare our sources list
         self.sources = Sources()
-
-        if self.mode == self.MODE_TEMPLATE:
-            type = SourceBase.TYPE_TEMPLATE
-        else:
-            type = SourceBase.TYPE_HEADERED
-
         for i in self.inputs:
             relpath = os.path.relpath(i, self.root_dir)
             toroot = "../" * relpath.replace("\\", "/").count("/")
 
-            source = SourceFile(type, i)
-            source.relpath = relpath
+            source = SourceFile(self.type, i)
+            source.relpath = relpath.replace("\\", "/")
             source.toroot = toroot
             self.sources.add(source)
 
@@ -380,16 +378,28 @@ class App(object):
             renderer = mrbaviirc.template.StringRenderer()
             template.render(renderer, data)
 
-            outbase = os.path.join(self.out_dir, os.path.dirname(source.relpath))
+            outbase = os.path.join(
+                self.out_dir,
+                os.path.dirname(source.relpath.replace("/", os.sep))
+            )
             sections = renderer.get_sections()
             for name in sections:
                 if not name.startswith("file:"):
                     continue
                 filename = name[5:]
                 outname = os.path.join(outbase, os.path.basename(filename))
-                print(outname)
-                print("==========================")
-                print(renderer.get_section(name))
+                print("{0} -> {1}".format(source._filename, outname))
+                # IF dryrun, do nothing
+                if True:
+                    if not os.path.isdir(outbase):
+                        os.makedirs(outbase)
+                    with io.open(outname, "wt", encoding="UTF-8", newline="\n") as handle:
+                        handle.write(renderer.get_section(name))
+
+
+    def save_output(self, filename, content):
+        """ Save output to a file.  But only if it hasn't changed. """
+
 
 
 
