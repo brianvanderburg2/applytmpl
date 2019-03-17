@@ -204,6 +204,17 @@ class App(object):
         parser = argparse.ArgumentParser(description="Make static pages.")
         addarg = parser.add_argument
 
+        addarg("-v", "--verbose", dest="verbose", action="count", default=1,
+            help="Increaes verbosity level.")
+        addarg("-q", "--quiet", dest="verbose", action="store_const", const=0,
+            help="Set verbosity level to 0")
+
+        addarg("--dry", dest="dry", action="store_true", default=False,
+            help="Dry run, don't save any files.")
+
+        addarg("--force", dest="force", action="store_true", default=False,
+            help="Force save even if output is the same.")
+
         addarg("--type", dest="type", default="template", choices=("template", "xml", "json", "ini", "auto"),
             help="Specify whether how the input is treated.")
 
@@ -247,6 +258,11 @@ class App(object):
         args = parser.parse_args()
 
         # Put into out attributes
+        self.verbose = args.verbose
+        self.dry = args.dry
+
+        self.force = args.force
+
         if args.type == "auto":
             self.type = SourceBase.TYPE_HEADERED
         else:
@@ -311,22 +327,36 @@ class App(object):
 
         for (name, (type, filename)) in self.data.items():
             # Use SourceFile since it already does the parsing
+            if self.verbose >= 1:
+                print("Loading data: {0}={1}".format(name, filename))
             self.template_vars[name] = SourceFile(type, filename).data
 
     def find_inputs(self):
         """ Accumulate all inputs in self.inputs. """
 
+        if self.verbose >= 1:
+            print("Finding inputs")
+
         # First find all inputs
         self.inputs = list(self.initial_inputs)
+        if self.verbose >= 2:
+            for i in self.inputs:
+                print("Input: {0}".format(i))
 
         for fn in self.input_from_files:
+            if self.verbose >= 1:
+                print("Reading inputs from file: {0}".format(fn))
             with io.open(fn, "rt", newline=None) as handle:
                 for line in handle:
                     line = line.rstrip("\n")
                     if line and line[0:1] != "#":
                         self.inputs.append(line)
+                        if self.verbose >= 2:
+                            print("Input: {0}".format(line))
 
         if self.walk:
+            if self.verbose >= 1:
+                print("Scanning for inputs: {0}".format(self.walk))
             for (sdir, sdirs, sfiles) in os.walk(self.root_dir):
                 # First check for ignores for directories
                 sdirs.sort()
@@ -345,7 +375,10 @@ class App(object):
                             break # break ignore filter loop
                     else:
                         # ignore filter loop not broken
-                        self.inputs.append(os.path.join(sdir, fn))
+                        fn = os.path.join(sdir, fn)
+                        self.inputs.append(fn)
+                        if self.verbose >= 2:
+                            print("Input: {0}".format(fn))
 
         # Now prepare our sources list
         self.sources = Sources()
@@ -361,7 +394,15 @@ class App(object):
     def handle_inputs(self):
         """ Handle the inputs. """
 
+        if self.verbose >= 1:
+            if not self.dry:
+                print("Building")
+            else:
+                print("Building (DRYRUN)")
+
         for source in self.sources:
+            if self.verbose >= 2:
+                print("Processing: {0}".format(source._filename))
             source._load()
             if source.type == SourceBase.TYPE_TEMPLATE:
                 # The source is the template
@@ -388,22 +429,28 @@ class App(object):
                     continue
                 filename = name[5:]
                 outname = os.path.join(outbase, os.path.basename(filename))
-                print("{0} -> {1}".format(source._filename, outname))
-                # IF dryrun, do nothing
-                if True:
+                if self.verbose >= 1:
+                    print("Generating{0}: {1} -> {2}".format("(DRYRUN)" if self.dry else "", source._filename, outname))
+                if not self.dry:
                     if not os.path.isdir(outbase):
                         os.makedirs(outbase)
-                    with io.open(outname, "wt", encoding="UTF-8", newline="\n") as handle:
-                        handle.write(renderer.get_section(name))
-
+                    self.save_output(outname, renderer.get_section(name))
 
     def save_output(self, filename, content):
         """ Save output to a file.  But only if it hasn't changed. """
+        save = True
+        if not self.force:
+            if os.path.isfile(filename):
+                with io.open(filename, "rt", encoding="UTF-8", newline=None) as handle:
+                    original = handle.read()
+                    if original == content:
+                        save = False
+                        if self.verbose >= 1:
+                            print("No change: {0}".format(filename))
 
-
-
-
-
+        if save:
+            with io.open(filename, "wt", encoding="UTF-8", newline="\n") as handle:
+                handle.write(content)
 
     def realrun(self):
         """ Run the application. """
