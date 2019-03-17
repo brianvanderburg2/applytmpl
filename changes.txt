@@ -1,0 +1,18 @@
+Unreleased
+==========
+
+Added
+=====
+
+* Added an option to specify a dryrun.  In this mode, output sections do not
+  get saved to a file.
+
+* Added an option to force a save.  When this is enabled, even if the output
+  content matches the generated content, it will be saved. By default if the
+  contents of the output file matches the generated content, it will not be
+  saved.
+
+* Added options for verbosity levels.
+
+* Print ouput at various areas to show program progress.
+
