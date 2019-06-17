@@ -14,5 +14,8 @@ Added
 
 * Added options for verbosity levels.
 
-* Print ouput at various areas to show program progress.
+* Print ouput at various areas to show program progress
+
+* Added ability to load an external code module which can provide imports, 
+  defines, and hooks.
 
