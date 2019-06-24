@@ -28,8 +28,8 @@ from .sources import SourceBase, SourceFile, SourceList
 class App:
     """ The main application class. """
 
-    MODE_TEMPLATE = 0
-    MODE_DATA = 1
+    MODE_PERFILE = 0
+    MODE_SINGLE = 1
 
     def __init__(self):
         """ Initialize the application. """
@@ -55,6 +55,7 @@ class App:
         self.out_dir = None
         self.defines = None
         self.type = None
+        self.mode = None
         self.exclude = None
         self.dry = None
         self.initial_inputs = None
@@ -83,6 +84,12 @@ class App:
         addarg(
             "--force", dest="force", action="store_true", default=False,
             help="Force save even if output is the same."
+        )
+
+        addarg(
+            "--mode", dest="mode", default="perfile", choices=["perfile", "single"],
+            help="Process each file individually (perfile) or apply the template "
+                 "to the entire collection of sources (single)"
         )
 
         addarg(
@@ -165,6 +172,11 @@ class App:
         self.dry = args.dry
 
         self.force = args.force
+
+        if args.mode == "perfile":
+            self.mode = self.MODE_PERFILE
+        else:
+            self.mode = self.MODE_SINGLE
 
         if args.type == "auto":
             self.type = SourceBase.TYPE_HEADERED
@@ -334,10 +346,31 @@ class App:
             else:
                 print("Building (DRYRUN)")
 
+        if self.mode == self.MODE_PERFILE:
+            self.handle_inputs_perfile()
+        else:
+            self.handle_inputs_single()
+
+    def handle_inputs_single(self):
+        """ Handle the inputs in single mode. """
+
+        templatepath = self.template_pattern.replace("{}", self.template_default)
+        template = self.template_env.load_file(templatepath)
+
+        data = dict(self.template_vars)
+        data["source"] = None
+        data["sources"] = self.sources
+
+        self.render_and_save(template, data, self.out_dir, "Template " + templatepath)
+
+    def handle_inputs_perfile(self):
+        """ Handle the inputs in per-file mode. """
+
         for source in self.sources:
             if self.verbose >= 2:
                 print("Processing: {0}".format(source.filename))
             source.load()
+
             if source.type == SourceBase.TYPE_TEMPLATE:
                 # The source is the template
                 template = self.template_env.load_text(
@@ -353,27 +386,32 @@ class App:
             data["source"] = source
             data["sources"] = self.sources
 
-            renderer = mrbaviirc.template.StringRenderer()
-            template.render(renderer, data)
-
             outbase = os.path.join(
                 self.out_dir,
                 os.path.dirname(source.relpath.replace("/", os.sep))
             )
-            sections = renderer.get_sections()
-            for name in sections:
-                if not name.startswith("file:"):
-                    continue
-                filename = name[5:]
-                outname = os.path.join(outbase, os.path.basename(filename))
-                if self.verbose >= 1:
-                    print("Generating{0}: {1} -> {2}".format(
-                        "(DRYRUN)" if self.dry else "", source.filename, outname
-                    ))
-                if not self.dry:
-                    if not os.path.isdir(outbase):
-                        os.makedirs(outbase)
-                    self.save_output(outname, renderer.get_section(name))
+
+            self.render_and_save(template, data, outbase, source.filename)
+
+    def render_and_save(self, template, data, outbase, source):
+        """ Render a set of data and save the results. """
+        renderer = mrbaviirc.template.StringRenderer()
+        template.render(renderer, data)
+
+        sections = renderer.get_sections()
+        for name in sections:
+            if not name.startswith("file:"):
+                continue
+            filename = name[5:]
+            outname = os.path.join(outbase, os.path.basename(filename))
+            if self.verbose >= 1:
+                print("Generating{0}: {1} -> {2}".format(
+                    "(DRYRUN)" if self.dry else "", source, outname
+                ))
+            if not self.dry:
+                if not os.path.isdir(outbase):
+                    os.makedirs(outbase)
+                self.save_output(outname, renderer.get_section(name))
 
     def save_output(self, filename, content):
         """ Save output to a file.  But only if it hasn't changed. """
