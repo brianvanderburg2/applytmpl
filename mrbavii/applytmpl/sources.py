@@ -56,7 +56,6 @@ class SourceBase:
         self._data = None
 
         # Externally assigned/accessed
-        self.basename = None
         self.relpath = None
         self.toroot = None
 

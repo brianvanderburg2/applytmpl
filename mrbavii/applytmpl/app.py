@@ -321,7 +321,6 @@ class App:
             toroot = "../" * relpath.replace("\\", "/").count("/")
 
             source = SourceFile(self.type, i)
-            source.basename = os.path.basename(relpath)
             source.relpath = relpath.replace("\\", "/")
             source.toroot = toroot
             self.sources.add(source)
@@ -352,6 +351,7 @@ class App:
 
             data = dict(self.template_vars)
             data["source"] = source
+            data["sources"] = self.sources
 
             renderer = mrbaviirc.template.StringRenderer()
             template.render(renderer, data)
