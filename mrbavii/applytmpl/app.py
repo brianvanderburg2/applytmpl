@@ -378,7 +378,7 @@ class App:
                 )
             else:
                 # The source is the data
-                templatename = source.meta.get("template", [self.template_default])[0].strip()
+                templatename = source.meta.get("template", self.template_default).strip()
                 templatepath = self.template_pattern.replace("{}", templatename)
                 template = self.template_env.load_file(templatepath)
 

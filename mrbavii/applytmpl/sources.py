@@ -9,6 +9,7 @@ __license__ = "Apache License 2.0"
 
 import configparser
 import contextlib
+import fnmatch
 import io
 import json
 
@@ -119,10 +120,10 @@ class SourceBase:
                         continue
 
                     (name, value) = (parts[0].strip().lower(), parts[1].strip())
-                    self._meta.setdefault(name, []).append(value)
+                    self._meta[name] = value
 
                 # Fixup the type of data we have
-                type = self._meta.get("type", [None])[0]
+                type = self._meta.get("type", None)
                 self._type = self.TYPE_MAP.get(type, self.TYPE_UNKNOWN)
                 if self._type == self.TYPE_UNKNOWN:
                     # TODO: error
@@ -189,3 +190,85 @@ class SourceList:
 
     def __iter__(self):
         yield from self._sources
+
+    def include_path(self, pattern):
+        """ Filter the list by those with a relpath matching a pattern. """
+        new_sources = SourceList()
+        for source in self._sources:
+            if fnmatch.fnmatch(source.relpath, pattern):
+                new_sources.add(source)
+
+        return new_sources
+
+    def exclude_path(self, pattern):
+        """ Filter the list by those with a relpath matching a pattern. """
+        new_sources = SourceList()
+        for source in self._sources:
+            if not fnmatch.fnmatch(source.relpath, pattern):
+                new_sources.add(source)
+
+        return new_sources
+
+    @staticmethod
+    def meta_check(value, test):
+        """ Test a value against a check. """
+
+        if not test:
+            return True # An empty test passes just by having the metadata name
+
+        parts = tuple(v.strip().lower() for v in value.split(","))
+        test = test.lower()
+        for part in parts:
+            if test in part:
+                return True
+
+        return False
+
+    def include_meta(self, name, test=""):
+        """ Filter by matched meta. """
+        new_sources = SourceList()
+        for source in self._sources:
+            if name in source.meta and self.meta_check(source.meta[name], test):
+                new_sources.add(source)
+
+        return new_sources
+
+    def exclude_meta(self, name, test=""):
+        """ Filter by matched meta. """
+        new_sources = SourceList()
+        for source in self._sources:
+            if name in source.meta and self.meta_check(source.meta[name], test):
+                pass # Exclude matched items
+            else:
+                new_sources.add(source)
+
+        return new_sources
+
+    def sorted(self, meta):
+        """ Sort by given meta. Return a new list since sorting top level
+            sources may mess up handling the inputs. """
+        # pylint: disable=protected-access
+        new_sources = SourceList()
+        new_sources._sources = list(self._sources)
+
+        for part in reversed(meta.split(",")):
+            # pylint: disable=cell-var-from-loop
+
+            # Reversed or not for this part
+            rsort = False
+            if part[0:2] == "a:":
+                part = part[2:]
+            elif part[0:2] == "d:":
+                rsort = True
+                part = part[2:]
+
+            def _keyfn(obj):
+                if part == "relpath":
+                    # magic meta refer's to the source's relpath
+                    return obj.relpath if obj.relpath is not None else ""
+
+                return obj.meta.get(part, "")
+
+            new_sources._sources.sort(key=_keyfn, reverse=rsort)
+
+        return new_sources
