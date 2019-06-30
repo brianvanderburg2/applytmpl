@@ -272,3 +272,30 @@ class SourceList:
             new_sources._sources.sort(key=_keyfn, reverse=rsort)
 
         return new_sources
+
+    def __len__(self):
+        """ Count the sources. """
+        return len(self._sources)
+
+    def __getitem__(self, item):
+        """ Get an item or slice """
+
+        if isinstance(item, slice):
+            new_sources = SourceList()
+            # pylint: disable=protected-access
+            new_sources._sources = self._sources[item]
+            return new_sources
+
+        return self._sources[item]
+
+    def split(self, size):
+        """ Split the sources into sets of n.
+            The last set may have less than n. """
+        results = []
+        for i in range(0, len(self._sources), size):
+            new_sources = SourceList()
+            #pylint: disable=protected-access
+            new_sources._sources = self._sources[i:i+size]
+            results.append(new_sources)
+
+        return results
