@@ -23,7 +23,7 @@ except ImportError:
 import mrbaviirc.template
 
 from .sources import SourceFile, SourceList
-
+from .lib import ApplytmplLib
 
 class App:
     """ The main application class. """
@@ -248,7 +248,8 @@ class App:
 
         env = mrbaviirc.template.Environment(
             loader=loader,
-            allow_code=self.template_code
+            allow_code=self.template_code,
+            importers={"mrbavii.applytmpl": lambda: ApplytmplLib(self.data_dirs)}
         )
 
         self.template_env = env
