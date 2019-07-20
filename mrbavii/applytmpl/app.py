@@ -22,7 +22,7 @@ except ImportError:
 
 import mrbaviirc.template
 
-from .sources import SourceBase, SourceFile, SourceList
+from .sources import SourceFile, SourceList
 
 
 class App:
@@ -41,6 +41,7 @@ class App:
         self.execcode = None
         self.data = None
         self.root_dir = None
+        self.data_dirs = None
         self.walk = None
         self.template_default = None
         self.template_dirs = None
@@ -106,6 +107,11 @@ class App:
         addarg(
             "--out-dir", dest="out_dir", required=True,
             help="Output directory."
+        )
+
+        addarg(
+            "--data-dir", dest="data_dir", action="append", default=[],
+            help="Data directory for loading data files from a template."
         )
 
         addarg(
@@ -178,13 +184,11 @@ class App:
         else:
             self.mode = self.MODE_SINGLE
 
-        if args.type == "auto":
-            self.type = SourceBase.TYPE_HEADERED
-        else:
-            self.type = SourceBase.TYPE_MAP[args.type]
+        self.type = args.type
 
         self.root_dir = args.root_dir
         self.out_dir = args.out_dir
+        self.data_dirs = tuple(args.data_dir)
 
         self.template_dirs = tuple(args.template_dir)
         self.template_pattern = args.template_pattern
@@ -210,7 +214,7 @@ class App:
                 # TODO: error
                 continue
 
-            self.data[parts[0].strip()] = (SourceBase.TYPE_MAP[parts[1].strip()], parts[2].strip())
+            self.data[parts[0].strip()] = (parts[1].strip(), parts[2].strip())
 
         self.code = tuple(args.code)
         self.execcode = []
@@ -371,7 +375,7 @@ class App:
                 print("Processing: {0}".format(source.filename))
             source.load()
 
-            if source.type == SourceBase.TYPE_TEMPLATE:
+            if source.type == "template":
                 # The source is the template
                 template = self.template_env.load_text(
                     source.body, source.filename, self.template_code

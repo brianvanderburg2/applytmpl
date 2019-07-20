@@ -25,26 +25,14 @@ from mrbaviirc.template.lib.xml import ElementTreeWrapper
 class SourceBase:
     """ Represent a single source. """
 
-    TYPE_HEADERED = 0 # Temporary type until type is read from header
-    TYPE_XML = 1
-    TYPE_JSON = 2
-    TYPE_INI = 3
-    TYPE_TEMPLATE = 4
-    TYPE_UNKNOWN = 99
-
-    TYPE_MAP = {
-        "xml": TYPE_XML,
-        "json": TYPE_JSON,
-        "ini": TYPE_INI,
-        "template": TYPE_TEMPLATE
-    }
-
-    TYPENAME_MAP = {
-        TYPE_XML: "xml",
-        TYPE_JSON: "json",
-        TYPE_INI: "ini",
-        TYPE_TEMPLATE: "template",
-    }
+    TYPES = (
+        "auto", # Temporary type until final type is known
+        "unknown", # Unable to determine type
+        "xml",
+        "json",
+        "ini",
+        "template",
+    )
 
     def __init__(self, type):
         """ Initialize the source. """
@@ -70,7 +58,7 @@ class SourceBase:
 
     @property
     def typename(self):
-        return self.TYPENAME_MAP.get(self._type, "unknown")
+        return self.type if self.type in self.TYPES else "unknown"
 
     @property
     def meta(self):
@@ -105,7 +93,7 @@ class SourceBase:
             self._meta = {}
             self._body_offset = 0
 
-            if self._type == self.TYPE_HEADERED:
+            if self._type == "auto":
                 while True:
                     self._body_offset += 1
                     line = handle.readline().strip()
@@ -124,8 +112,8 @@ class SourceBase:
 
                 # Fixup the type of data we have
                 type = self._meta.get("type", None)
-                self._type = self.TYPE_MAP.get(type, self.TYPE_UNKNOWN)
-                if self._type == self.TYPE_UNKNOWN:
+                self._type = type if type in self.TYPES else "unknown"
+                if self._type == "unknown":
                     # TODO: error
                     pass
 
@@ -133,22 +121,22 @@ class SourceBase:
             self._body = handle.read()
 
         # After reading, parse the body
-        if self._type == self.TYPE_TEMPLATE:
+        if self._type == "template":
             self._data = self._body
-        elif self._type == self.TYPE_XML:
+        elif self._type == "xml":
             try:
                 root = ET.fromstring("\n" * self._body_offset + self._body)
                 self._data = ElementTreeWrapper(root)
             except ET.ParseError as exc:
                 exc.filename = self._filename
                 raise
-        elif self._type == self.TYPE_JSON:
+        elif self._type == "json":
             try:
                 self._data = json.loads("\n" * self._body_offset + self._body)
             except json.JSONDecodeError as exc:
                 exc.filename = self._filename
                 raise
-        elif self._type == self.TYPE_INI:
+        elif self._type == "ini":
             try:
                 config = configparser.ConfigParser()
                 config.read_string("\n" * self._body_offset + self._body, self._filename)
