@@ -6,17 +6,21 @@ __license__ = "Apache License 2.0"
 
 
 import os
+import sys
 
-from .sources import SourceFile
+from .errors import AbortError
+from .sources import SourceString
+
 
 
 class ApplytmplLib:
     """ Template library for applytmpl. """
 
-    def __init__(self, data_dirs):
+    def __init__(self, app):
         """ Initialize the library. """
 
-        self._data_dirs = data_dirs
+        self._app = app
+        self._data_dirs = app.data_dirs
 
 
     def _find_data(self, filename):
@@ -33,7 +37,7 @@ class ApplytmplLib:
 
         return None
 
-    def load_data(self, datatype, filename):
+    def load_datafile(self, datatype, filename):
         """ Load a data file. """
 
         filename = self._find_data(filename)
@@ -43,3 +47,23 @@ class ApplytmplLib:
         source = SourceFile(datatype, filename)
         source.load()
         return source.data
+
+    def load_datatext(self, datatype, text):
+        """ Load data from text. """
+        source = SourceString(datatype, text)
+        source.load()
+        return source.data
+
+    def warning(self, message):
+        """ Print a warning message. """
+        print("Warning: " + message, file=sys.stderr, flush=True)
+
+    def info(self, message):
+        """ Print an informational message. """
+
+        if self._app.verbose:
+            print("Info: " + message, flush=True)
+
+    def error(self, message):
+        """ Print an error message and abort. """
+        raise AbortError(message)

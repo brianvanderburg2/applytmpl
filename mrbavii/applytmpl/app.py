@@ -22,6 +22,7 @@ except ImportError:
 
 import mrbaviirc.template
 
+from .errors import Error
 from .sources import SourceFile, SourceList
 from .lib import ApplytmplLib
 
@@ -249,7 +250,7 @@ class App:
         env = mrbaviirc.template.Environment(
             loader=loader,
             allow_code=self.template_code,
-            importers={"mrbavii.applytmpl": lambda: ApplytmplLib(self.data_dirs)}
+            importers={"mrbavii.applytmpl": lambda: ApplytmplLib(self)}
         )
 
         self.template_env = env
@@ -462,6 +463,8 @@ class App:
         except json.JSONDecodeError as exc:
             print("{0}: {1}".format(exc.__class__.__name__, exc))
         except mrbaviirc.template.errors.Error as exc:
+            print("{0}: {1}".format(exc.__class__.__name__, exc))
+        except Error as exc:
             print("{0}: {1}".format(exc.__class__.__name__, exc))
 
         sys.exit(-1)
