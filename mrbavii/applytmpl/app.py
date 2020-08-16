@@ -402,9 +402,9 @@ class App:
     def render_and_save(self, template, data, outbase, source):
         """ Render a set of data and save the results. """
         renderer = mrbaviirc.template.StringRenderer()
-        template.render(renderer, data)
+        result = template.render(renderer, data)
 
-        sections = renderer.get_sections()
+        sections = result.sections
         for name in sections:
             if not name.startswith("file:"):
                 continue
@@ -417,7 +417,7 @@ class App:
             if not self.dry:
                 if not os.path.isdir(outbase):
                     os.makedirs(outbase)
-                self.save_output(outname, renderer.get_section(name))
+                self.save_output(outname, sections[name])
 
     def save_output(self, filename, content):
         """ Save output to a file.  But only if it hasn't changed. """
