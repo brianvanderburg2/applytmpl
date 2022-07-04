@@ -53,7 +53,6 @@ class App:
         self.sources = None
         self.force = None
         self.input_from_files = None
-        self.template_code = None
         self.out_dir = None
         self.defines = None
         self.type = None
@@ -132,11 +131,6 @@ class App:
         )
 
         addarg(
-            "--template-code", dest="template_code", default=False, action="store_true",
-            help="Enable use of code sections in templates."
-        )
-
-        addarg(
             "--define", dest="define", action="append", default=[],
             help="<name>:<value> defines passed to the templates."
         )
@@ -194,7 +188,6 @@ class App:
         self.template_dirs = tuple(args.template_dir)
         self.template_pattern = args.template_pattern
         self.template_default = args.template_default
-        self.template_code = args.template_code
 
         self.defines = {}
         for i in args.define:
@@ -249,7 +242,6 @@ class App:
 
         env = mrbaviirc.template.Environment(
             loader=loader,
-            allow_code=self.template_code,
             importers={"mrbavii.applytmpl": lambda: ApplytmplLib(self)}
         )
 
@@ -380,7 +372,7 @@ class App:
             if source.type == "template":
                 # The source is the template
                 template = self.template_env.load_text(
-                    source.body, source.filename, self.template_code
+                    source.body, source.filename
                 )
             else:
                 # The source is the data
